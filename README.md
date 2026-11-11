@@ -170,7 +170,7 @@ Use **`/status`** to inspect the binding. Use `/connect` again to select a diffe
 
 | Action | What happens |
 | --- | --- |
-| Send a message from Discord | The relay validates the target, then pastes text into its input box. |
+| Send a message from Discord | Discord takes priority: the relay clears the unsent terminal draft, verifies the composer, then pastes and submits your new text. |
 | Type directly in the terminal | New visible conversation messages can also appear in Discord. |
 | Switch native model sessions in the same pane | The relay follows once it can identify the selected session. |
 | Exit a model, switch its login account, and restart it in the same pane | The relay waits for a supported foreground model, then reconnects. |
@@ -191,6 +191,8 @@ One pane can be connected to only one channel at a time in this implementation. 
 - Delivery cursors and input hashes reduce duplicates during normal restarts. This is not a transactional exactly-once messaging system: a crash between sending a Discord message and saving its cursor can repeat output.
 - Input blocked while the model is absent, unidentified, or in an unsupported UI state is not queued for automatic replay. Check the terminal before resending an input whose delivery is uncertain.
 
+Discord input replaces unsent terminal drafts, including multiline drafts. The relay uses editing shortcuts and checks the result before submitting. It does not send Escape or Ctrl+C to clear input, interrupt a running task, or answer an approval dialog. Custom keymaps or an unrecognized composer may prevent clearing; in that case the new message is not submitted. This policy applies to Discord messages from both mobile and desktop clients. The relay does not preserve a copy of the overwritten draft.
+
 ### Tables and formulas
 
 Pipe tables are converted to monospaced code blocks. Long cells wrap, and large tables are split with repeated headers. This preserves table contents, but it is not a native spreadsheet or horizontally scrollable table widget.
@@ -207,7 +209,7 @@ Rendering happens locally. Formula rendering itself makes no model calls and doe
 | `/connect` is missing | Verify the app was installed with `applications.commands` and that the relay completed startup. Commands are registered for the configured server. |
 | No terminal appears | Run tmux under the same Linux user and default tmux socket as the relay. This version does not discover custom socket names. |
 | The pane appears as waiting for a model | Start Codex or Claude Code in that pane, or return it to the foreground. |
-| Input is blocked by a dialog or existing draft | Handle the prompt or clear/send the draft in the native terminal first. |
+| Input is blocked by a dialog or failed draft replacement | Ordinary drafts are overwritten automatically. Handle native approval dialogs separately; check custom editor keybindings if clearing cannot be verified. |
 | Codex pauses while identifying a session | Use a unique native thread name and keep the default title fields containing the thread name. Update the adapter if the CLI's title or transcript format has changed. |
 | A terminal restart does not reconnect | Check whether the pane or tmux server was recreated; select it again with `/connect`. |
 | A formula is shown as source | Inspect its delimiters and TeX syntax, then run `npm test`. Unsupported commands or renderer limits trigger the fallback. |

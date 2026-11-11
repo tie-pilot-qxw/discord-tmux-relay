@@ -3,6 +3,7 @@ import {promisify} from 'node:util';
 import {readFile,readlink} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {findInputArea} from './input-area.mjs';
+import {prepareInputReplacement,isInputPlaceholder} from './replace-input.mjs';
 const exec=promisify(execFile);
 export async function tmux(args){return (await exec('tmux',args,{maxBuffer:4*1024*1024,timeout:5000})).stdout;}
 export function redact(s){return String(s).replace(/\bsk-[\w-]{12,}/g,'[key redacted]').replace(/\bmfa\.[\w-]{20,}/g,'[credential redacted]').replace(/\b[A-Za-z0-9_-]{24,}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{25,}\b/g,'[credential redacted]').replace(/((?:token|api[_-]?key|password|secret)\s*[=:]\s*)["']?[^\s"']{12,}/ig,'$1[redacted]');}
@@ -47,11 +48,11 @@ export async function validateTarget(target){
  return identity;
 }
 export async function screen(target){await validateTarget(target);return redact(await tmux(['capture-pane','-p','-t',target.pane]));}
-export function inputBlockReason(text,agent){
+export function inputBlockReason(text,agent,{allowDraft=false}={}){
  if(/esc (?:to )?close|escape (?:to )?close|enter copy|enter to (?:confirm|select)|Do you want to proceed|Allow .*(?:once|always)/i.test(text))return 'The terminal has an open dialog or selection prompt. Handle it in the terminal first.';
  const prompt=findInputArea(text,agent);if(!prompt)return 'No supported model input prompt found. Check the terminal; input was not sent.';
  const draft=prompt.draft;
- if(draft&&!/^(?:Ask Codex to do anything|Type a message|Try ")/.test(draft))return 'The terminal already contains a draft. Send or clear it before forwarding another message.';
+ if(draft&&!allowDraft&&!isInputPlaceholder(draft))return 'The terminal contains a draft that has not been cleared.';
  return null;
 }
 export async function pasteLiteral(pane,text){
@@ -62,8 +63,11 @@ export async function pasteLiteral(pane,text){
  finally{await tmux(['delete-buffer','-b',name]).catch(()=>{});}
 }
 export async function sendText(target,text,guard=async()=>{}){
- const view=await screen(target),reason=inputBlockReason(view,target.agent);if(reason)throw Error(reason);
- await validateTarget(target);await guard();await pasteLiteral(target.pane,text);
+ if(/[\x00-\x08\x0b-\x1f\x7f]/.test(text))throw Error('Input contains terminal control characters and was not sent.');
+ await prepareInputReplacement({agent:target.agent,readScreen:()=>screen(target),checkScreen:(view,options)=>inputBlockReason(view,target.agent,options),validate:()=>validateTarget(target),guard,sendKeys:keys=>tmux(['send-keys','-t',target.pane,...keys]),pause:()=>new Promise(resolve=>setTimeout(resolve,150))});
+ await validateTarget(target);await guard();
+ const check=await screen(target),reason=inputBlockReason(check,target.agent);if(reason)throw Error(reason);
+ await pasteLiteral(target.pane,text);
 }
 export async function closeViewer(target){
  const view=await screen(target);
