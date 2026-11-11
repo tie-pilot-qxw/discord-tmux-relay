@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import {mkdtemp,writeFile,appendFile,readFile,stat,open,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {createHash} from 'node:crypto';
+import {chatMessage,chunks} from './chat.mjs';
+import {timestamp} from './follow.mjs';
+const source=await readFile(new URL('./bridge.mjs',import.meta.url),'utf8');
+const code=source.slice(source.indexOf('async function poll(b){'),source.indexOf('let polling=false'));
+const build=new Function('state','validateTarget','stat','open','chatMessage','hash','client','post','save','timestamp',code+';return poll;');
+const hash=s=>createHash('sha256').update(typeof s==='string'?s.trim():s).digest('hex');
+const dir=await mkdtemp(join(tmpdir(),'relay-output-test-')),file=join(dir,'log.jsonl');
+try{
+ await writeFile(file,'');const ino=(await stat(file)).ino;
+ const state={test:{offset:0,ino,seen:[],inputs:[{hash:hash('我从 Discord 发来的消息')}]}},sent=[];
+ const poll=build(state,async()=>{},stat,open,chatMessage,hash,{channels:{fetch:async()=>({})}},async(_c,text)=>{sent.push(...chunks(text));},async()=>{},timestamp);
+ const b={channel:'test',target:{agent:'claude'},log:file};
+ const record=(type,content,uuid)=>JSON.stringify({type,uuid,message:{content}})+'\n';
+ const long='这是完整回复😀\n'.repeat(600);
+ await appendFile(file,record('user','我从 Discord 发来的消息','u1')+record('user','<task-notification>内部信息</task-notification>','n1')+record('assistant',long,'a1'));
+ await poll(b);assert.equal(sent.join(''),long);const count=sent.length;
+ await poll(b);assert.equal(sent.length,count);
+ const next=record('assistant','后续中文回复','a2'),bytes=Buffer.from(next),split=bytes.indexOf(Buffer.from('中文'))+1;
+ await appendFile(file,bytes.subarray(0,split));await poll(b);assert.equal(sent.length,count);
+ await appendFile(file,bytes.subarray(split));await poll(b);assert.equal(sent.at(-1),'后续中文回复');
+ await appendFile(file,record('assistant','后续中文回复','a2'));await poll(b);assert.equal(sent.length,count+1);
+ console.log('PASS: full long reply delivered, Discord input not echoed, internal notifications omitted, no replay after cursor checkpoint, split UTF-8 record preserved, duplicate record suppressed.');
+}finally{await rm(dir,{recursive:true});}

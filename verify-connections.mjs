@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict';
+import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {ConnectionPicker,initialState,atomicJson} from './connections.mjs';
+import {sameServer} from './follow.mjs';
+const dir=await mkdtemp(join(tmpdir(),'relay-picker-test-')),file=join(dir,'config.json');
+try{
+ let now=100000,server={pid:20,start:'10',boot:'first-boot'};
+ let panes=Array.from({length:27},(_,n)=>({pane:'%'+n,root:100+n,rootStart:'r'+n,location:'test:'+n+'.0',cwd:'/test/'+n}));
+ const cfg={bindings:[]},picker=new ConnectionPicker({cfg,now:()=>now,getServer:async()=>server,getPanes:async()=>panes,getModels:async()=>[],persist:next=>atomicJson(file,next)});
+ const tokenOf=m=>m.components[0].components[0].custom_id.split(':')[2];
+ let menu=await picker.create('channel','owner'),token=tokenOf(menu);
+ assert.equal(menu.components[0].components[0].options.length,25);
+ assert.equal(picker.render(token,1,'channel','owner').components[0].components[0].options.length,2);
+ await assert.rejects(()=>picker.select(token,'0','other-channel','owner'),/expired/);
+ await assert.rejects(()=>picker.select(token,'0','channel','other-owner'),/expired/);
+ const result=await picker.select(token,'26','channel','owner');assert.equal(result.binding.pane,'%26');
+ assert.equal(JSON.parse(await readFile(file)).bindings[0].pane,'%26');
+ assert.equal(initialState(result.binding).active,undefined);assert.equal(initialState(result.binding).lastChecked,now);
+ await assert.rejects(()=>picker.select(token,'26','channel','owner'),/expired/);
+ menu=await picker.create('channel','owner');token=tokenOf(menu);const revision=result.binding.revision;
+ assert.equal((await picker.select(token,'26','channel','owner')).unchanged,true);assert.equal(cfg.bindings[0].revision,revision);
+ menu=await picker.create('second','owner');await assert.rejects(()=>picker.select(tokenOf(menu),'26','second','owner'),/already connected/);
+ menu=await picker.create('channel','owner');token=tokenOf(menu);server={...server,boot:'second-boot'};
+ assert.equal(sameServer({pid:20,start:'10',boot:'first-boot'},server),false);
+ await assert.rejects(()=>picker.select(token,'0','channel','owner'),/restarted/);
+ // Refresh after reboot allows the same pane number to be explicitly rebound.
+ menu=await picker.create('channel','owner');const rebound=await picker.select(tokenOf(menu),'26','channel','owner');assert.equal(rebound.unchanged,false);assert.equal(rebound.binding.server.boot,'second-boot');
+ const oldState={bindingRevision:revision,offset:999,active:{id:'old'},inputs:[1],incoming:{msg:'sent'}};
+ const fresh=initialState(rebound.binding,oldState);assert.equal(fresh.active,undefined);assert.equal(fresh.offset,0);assert.deepEqual(fresh.inputs,[]);assert.equal(fresh.incoming.msg,'sent');
+ assert.equal(initialState(rebound.binding,fresh),fresh);
+ menu=await picker.create('channel','owner');token=tokenOf(menu);panes[0]={...panes[0],rootStart:'replacement'};
+ await assert.rejects(()=>picker.select(token,'0','channel','owner'),/changed/);
+ menu=await picker.create('channel','owner');token=tokenOf(menu);now+=11*60000;
+ await assert.rejects(()=>picker.select(token,'0','channel','owner'),/expired/);
+ menu=await picker.create('channel','owner');token=tokenOf(menu);picker.persist=async()=>{throw Error('disk error');};
+ await assert.rejects(()=>picker.select(token,'0','channel','owner'),/disk error/);assert.equal(cfg.bindings[0].pane,'%26');
+ console.log('PASS: 27-window paging, owner/channel checks, durable selection, same-window no-op, duplicate binding guard, stale/rebooted/replaced window checks, rebind after reboot, cold-start state recovery, save failure preserves prior binding.');
+}finally{await rm(dir,{recursive:true});}

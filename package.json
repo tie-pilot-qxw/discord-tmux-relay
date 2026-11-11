@@ -1,0 +1,19 @@
+{
+  "name": "discord-tmux-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A personal Discord relay for existing tmux Codex and Claude Code terminals",
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "init": "node init.mjs",
+    "start": "node bridge.mjs",
+    "install-service": "node install-service.mjs",
+    "test": "python3 verify-codex.py && node verify-connections.mjs && node verify-poll.mjs && node verify-render.mjs && node verify-setup.mjs"
+  },
+  "dependencies": {
+    "discord.js": "14.28.1",
+    "mathjax-full": "3.2.2",
+    "sharp": "0.35.5"
+  }
+}

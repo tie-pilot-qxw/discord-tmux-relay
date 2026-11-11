@@ -1,0 +1,13 @@
+node_modules/
+config.json
+state.json
+discord-token
+*.lock
+!package-lock.json
+*.tmp
+.env
+.env.*
+__pycache__/
+*.pyc
+*.log
+data/
