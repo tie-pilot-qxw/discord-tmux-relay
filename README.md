@@ -194,7 +194,7 @@ Each native assistant message gets a visible reply heading. If formatting splits
 - Delivery cursors and input hashes reduce duplicates during normal restarts. This is not a transactional exactly-once messaging system: a crash between sending a Discord message and saving its cursor can repeat output.
 - Input blocked while the model is absent, unidentified, or in an unsupported UI state is not queued for automatic replay. Check the terminal before resending an input whose delivery is uncertain.
 
-Discord input replaces unsent terminal drafts, including multiline drafts. The relay uses editing shortcuts and checks the result before submitting. It does not send Escape or Ctrl+C to clear input, interrupt a running task, or answer an approval dialog. Custom keymaps or an unrecognized composer may prevent clearing; in that case the new message is not submitted. This policy applies to Discord messages from both mobile and desktop clients. The relay does not preserve a copy of the overwritten draft.
+Discord input replaces unsent terminal drafts, including multiline drafts. The relay uses editing shortcuts and checks the result before submitting. It waits for slow terminal repaints and tracks blank-line removal as progress; an already blank Claude composer needs no clearing keys. Failed clearing logs contain layout counts only, never draft text. It does not send Escape or Ctrl+C to clear input, interrupt a running task, or answer an approval dialog. Custom keymaps or an unrecognized composer may prevent clearing; in that case the new message is not submitted. This policy applies to Discord messages from both mobile and desktop clients. The relay does not preserve a copy of the overwritten draft.
 
 ### Tables and formulas
 
