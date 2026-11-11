@@ -2,6 +2,7 @@ import {execFile,spawn} from 'node:child_process';
 import {promisify} from 'node:util';
 import {readFile,readlink} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
+import {findInputArea} from './input-area.mjs';
 const exec=promisify(execFile);
 export async function tmux(args){return (await exec('tmux',args,{maxBuffer:4*1024*1024,timeout:5000})).stdout;}
 export function redact(s){return String(s).replace(/\bsk-[\w-]{12,}/g,'[key redacted]').replace(/\bmfa\.[\w-]{20,}/g,'[credential redacted]').replace(/\b[A-Za-z0-9_-]{24,}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{25,}\b/g,'[credential redacted]').replace(/((?:token|api[_-]?key|password|secret)\s*[=:]\s*)["']?[^\s"']{12,}/ig,'$1[redacted]');}
@@ -48,10 +49,8 @@ export async function validateTarget(target){
 export async function screen(target){await validateTarget(target);return redact(await tmux(['capture-pane','-p','-t',target.pane]));}
 export function inputBlockReason(text,agent){
  if(/esc (?:to )?close|escape (?:to )?close|enter copy|enter to (?:confirm|select)|Do you want to proceed|Allow .*(?:once|always)/i.test(text))return 'The terminal has an open dialog or selection prompt. Handle it in the terminal first.';
- const lines=text.split('\n');
- const candidates=lines.map((line,index)=>({line,index})).filter(x=>agent==='claude'?/^❯[\s\u00a0]/.test(x.line):/^›[\s\u00a0]/.test(x.line));
- const prompt=candidates.at(-1);if(!prompt)return 'No supported model input prompt found. Check the terminal; input was not sent.';
- const draft=prompt.line.slice(1).trim();
+ const prompt=findInputArea(text,agent);if(!prompt)return 'No supported model input prompt found. Check the terminal; input was not sent.';
+ const draft=prompt.draft;
  if(draft&&!/^(?:Ask Codex to do anything|Type a message|Try ")/.test(draft))return 'The terminal already contains a draft. Send or clear it before forwarding another message.';
  return null;
 }

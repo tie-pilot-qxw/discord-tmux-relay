@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {inputBlockReason} from './terminal.mjs';
+import {findInputArea} from './input-area.mjs';
+const frame=body=>`Earlier conversation\nWaiting for background agents\n───────────────── model ─\n${body}\n────────────────────────\n  permissions enabled\n  ● main\n❯ ◯ general-purpose  Waiting on a measurement run\n  ◯ general-purpose  Reading a file\n`;
+assert.equal(inputBlockReason(frame('❯\u00a0'),'claude'),null);
+assert.equal(findInputArea(frame('❯\u00a0'),'claude').framed,true);
+for(const draft of ['❯ real draft','❯ ◯ general-purpose  Waiting on a measurement run','❯ \n  continuation of a multiline draft'])assert.ok(inputBlockReason(frame(draft),'claude'));
+assert.ok(inputBlockReason('❯ old text\n❯ ◯ task row','claude'));
+assert.ok(inputBlockReason(frame('❯ ')+ 'enter to confirm','claude'));
+assert.equal(inputBlockReason('❯ \nfooter','claude'),null);
+assert.equal(inputBlockReason('› previous user message\nassistant reply\n› Ask Codex to do anything','codex'),null);
+assert.ok(inputBlockReason('› real draft','codex'));
+console.log('PASS: empty framed composer ignores task rows; actual and multiline drafts still block; ambiguous layouts and modals block; Codex unchanged.');

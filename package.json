@@ -9,7 +9,7 @@
     "init": "node init.mjs",
     "start": "node bridge.mjs",
     "install-service": "node install-service.mjs",
-    "test": "python3 verify-codex.py && node verify-connections.mjs && node verify-poll.mjs && node verify-render.mjs && node verify-setup.mjs"
+    "test": "python3 verify-codex.py && node verify-connections.mjs && node verify-poll.mjs && node verify-render.mjs && node verify-setup.mjs && node verify-input.mjs"
   },
   "dependencies": {
     "discord.js": "14.28.1",
