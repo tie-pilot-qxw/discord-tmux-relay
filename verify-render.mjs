@@ -12,7 +12,9 @@ assert.equal(mathParts(String.raw`\(x^2\) 和 $y^3$`).filter(p=>p.tex).length,2)
 assert.ok((await discordPayloads(String.raw`\[\UnknownCommand{x}\]`))[0].content.includes('UnknownCommand'));
 assert.ok((await discordPayloads(formula,async()=>{throw Error('fixture');}))[0].content.includes('frac'));
 const table='| 项目 | 数量 |\n|---|---|\n| 测试 A | 10 |\n| 测试 B | 20 |';
-assert.deepEqual((await discordPayloads(table)).map(p=>p.content),discordMessages(table));
+const tp=await discordPayloads(table);
+assert.equal((await sharp(tp[0].files[0].attachment).metadata()).format,'png');
+assert.equal(tp.at(-1).files.at(-1).attachment.toString(),table);
 const rows=Array.from({length:200},(_,i)=>['row-'+i,'说明文字😀 '+i]);
 const messages=tableMessages(['编号','内容'],rows);
 assert.ok(messages.every(s=>s.startsWith('```text\n')&&s.endsWith('\n```')&&s.length<=1800));

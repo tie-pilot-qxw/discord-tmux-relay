@@ -1,6 +1,7 @@
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {discordMessages} from './format.mjs';
+import {discordMessages,tableParts} from './format.mjs';
+import {tablePayloads} from './table-images.mjs';
 
 // Recognize TeX only outside fenced/inline/indented code. Do not treat prices
 // such as "$20 and $30" as formulas. Unclosed delimiters stay untouched.
@@ -52,7 +53,7 @@ async function renderBatch(items){
  });
 }
 
-export async function discordPayloads(text,render=renderBatch){
+async function mathPayloads(text,render=renderBatch){
  const parts=mathParts(text),eligible=parts.filter(p=>p.tex&&p.tex.length<=12000).slice(0,24);
  let images=[];if(eligible.length)images=await render(eligible).catch(()=>[]);
  const out=[];let number=0;
@@ -66,6 +67,16 @@ export async function discordPayloads(text,render=renderBatch){
    const safe=part.raw.replace(/```/g,'`\u200b``');
    for(const content of discordMessages(safe))out.push({content:'```latex\n'+content+'\n```'});
   }
+ }
+ return out;
+}
+export async function discordPayloads(text,render=renderBatch){
+ const out=[];let number=0;
+ // Parse whole tables before formulas so math inside a cell cannot break the
+ // table into disconnected fragments. Cell TeX remains copyable in the source.
+ for(const part of tableParts(text)){
+  if(part.text!==undefined)out.push(...await mathPayloads(part.text,render));
+  else out.push(...await tablePayloads(part,++number));
  }
  return out;
 }

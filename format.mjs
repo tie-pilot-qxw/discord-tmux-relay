@@ -26,7 +26,7 @@ export function cells(line){
  if(parts.at(-1)===''&&text.endsWith('|'))parts.pop();
  return parts;
 }
-function wrapCell(text,width){
+export function wrapCell(text,width){
  const out=[];
  for(const line of text.replace(/\\\|/g,'|').replace(/<br\s*\/?>/gi,'\n').replace(/\t/g,'    ').replace(/`{3}/g,'`\u200b``').split('\n')){
   let part='',used=0;
@@ -79,9 +79,9 @@ export function tableMessages(headers,rows,limit=1800){
  if(body!==header||!out.length)out.push(open+body+close);
  return out;
 }
-export function discordMessages(text,limit=1800){
+export function tableParts(text){
  const lines=text.split('\n'),out=[];let plain=[],fence=null;
- const flush=()=>{if(plain.length){out.push(...chunks(plain.join('\n'),limit));plain=[];}};
+ const flush=()=>{if(plain.length){out.push({text:plain.join('\n')});plain=[];}};
  for(let i=0;i<lines.length;i++){
   const line=lines[i],marker=line.match(/^\s*(?:>\s*)*(`{3,}|~{3,})/);
   if(marker){if(!fence)fence={char:marker[1][0],length:marker[1].length};else if(marker[1][0]===fence.char&&marker[1].length>=fence.length)fence=null;plain.push(line);continue;}
@@ -91,7 +91,10 @@ export function discordMessages(text,limit=1800){
   const rows=[];let end=i+2,invalid=false;
   for(;end<lines.length;end++){const row=cells(lines[end]);if(!row||!lines[end].trim())break;if(row.length>headers.length){invalid=true;break;}rows.push([...row,...Array(headers.length-row.length).fill('')]);}
   if(invalid||!rows.length){plain.push(line);continue;}
-  flush();out.push(...tableMessages(headers,rows,limit));i=end-1;
+  flush();out.push({headers,rows,raw:lines.slice(i,end).join('\n')});i=end-1;
  }
  flush();return out;
+}
+export function discordMessages(text,limit=1800){
+ return tableParts(text).flatMap(p=>p.text!==undefined?chunks(p.text,limit):tableMessages(p.headers,p.rows,limit));
 }

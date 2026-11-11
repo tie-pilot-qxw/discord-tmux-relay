@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import {writeFile} from 'node:fs/promises';
+import sharp from 'sharp';
+import {tableParts} from './format.mjs';
+import {layoutTable,renderTable} from './table-render.mjs';
+import {tablePayloads} from './table-images.mjs';
+import {discordPayloads} from './math.mjs';
+
+const raw='| Lane | 步骤 | 内容 |\n|---|---|---|\n'+Array.from({length:70},(_,i)=>`| ${i} | TEST-${i} | 中文说明：核对输入与输出，保留路径 src/check_${i}.rs 和完整内容。 |`).join('\n');
+const table=tableParts(raw)[0],layout=layoutTable(table);
+assert.ok(layout.pages.length>1);
+assert.deepEqual(layout.pages.flat().map(r=>r.index),Array.from({length:70},(_,i)=>i));
+const images=await renderTable(table);
+assert.equal(images.length,layout.pages.length);
+for(const image of images){const meta=await sharp(Buffer.from(image.png,'base64')).metadata();assert.equal(meta.format,'png');assert.ok(meta.height<=1600);assert.ok(meta.width<=3600);}
+const payloads=await tablePayloads(table,1,async()=>images);
+assert.equal(payloads.at(-1).files.at(-1).attachment.toString(),raw);
+assert.equal((await tablePayloads(table,1,async()=>{throw Error('fixture');}))[0].files[0].attachment.toString(),raw);
+const huge={headers:['ID','内容'],rows:[['one','中文'.repeat(1200)]],raw:'source'};
+const hugeLayout=layoutTable(huge);
+assert.ok(hugeLayout.pages.length>1);
+assert.equal(hugeLayout.pages.flat().flatMap(p=>p.columns[1]).join(''),'中文'.repeat(1200));
+assert.ok(hugeLayout.pages.slice(1).every(p=>p[0].continued));
+const fenced='```md\n'+raw+'\n```';assert.deepEqual(tableParts(fenced),[{text:fenced}]);
+const escaped=tableParts('| A | B |\n|---|---|\n| a\\|b | `<script>&` |')[0];
+assert.equal(escaped.rows[0][0],'a\\|b');assert.equal((await renderTable(escaped)).length,1);
+const mixed=await discordPayloads('Before\n'+raw+'\nAfter\n\\[x^2\\]');
+assert.equal(mixed[0].content,'Before');assert.ok(mixed.some(p=>p.content?.includes('After')));
+assert.ok(mixed.some(p=>p.files?.[0].name.startsWith('formula-')));
+const mathTable=await discordPayloads('| A | B |\n|---|---|\n| x | $x^2$ |');
+assert.ok(mathTable[0].files[0].name.startsWith('table-'));
+if(process.env.TABLE_PREVIEW)await writeFile(process.env.TABLE_PREVIEW,Buffer.from(images[0].png,'base64'));
+console.log('PASS: Chinese PNG, 70 rows, ordered pages, tall-row continuation, exact source, fallback, escaping, fenced code, formula ordering.');

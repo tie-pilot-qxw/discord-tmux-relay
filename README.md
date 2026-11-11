@@ -15,7 +15,7 @@ The relay pastes your messages into the existing terminal and forwards new conve
 - Keep new conversation messages in the same Discord channel.
 - Separate assistant replies with numbered headings; split replies share a reply number and part counts such as `1/3`, including tables and formula images.
 - Accept messages only from one configured Discord user in one configured server.
-- Format Markdown tables as aligned code blocks, splitting long tables with repeated headers.
+- Render Markdown tables as PNG images, splitting long tables with repeated headers and attaching the complete Markdown source.
 - Render supported TeX formulas into PNG attachments locally with MathJax and Sharp.
 - Run as a systemd user service without restarting the model processes.
 
@@ -198,11 +198,13 @@ Discord input replaces unsent terminal drafts, including multiline drafts. The r
 
 ### Tables and formulas
 
-Pipe tables are converted to monospaced code blocks. Long cells wrap, and large tables are split with repeated headers. This preserves table contents, but it is not a native spreadsheet or horizontally scrollable table widget.
+Pipe tables are rendered as PNG attachments so phone clients cannot reflow the columns. Tap an image to enlarge and pan. Long tables are paginated with repeated headers; exceptionally tall rows continue on the next page. Each table also includes its complete `.md` source for copying. Code examples are left unchanged. This is not an inline scrollable widget.
+
+Install a font covering your content on the relay host (for Chinese on Ubuntu: `sudo apt install fonts-noto-cjk`). Rendering uses Noto Sans Mono CJK SC with a monospace fallback. Oversized tables or rendering failures retain the complete source attachment. TeX inside table cells is currently displayed as source text; formulas outside tables are rendered as described below.
 
 TeX delimited by `\[ ... \]`, `$$ ... $$`, `\( ... \)`, or recognized `$ ... $` is rendered as PNG attachments. Tap the attachment to enlarge it on a phone. Inline formulas become separate image attachments rather than true inline typography. Code examples are left alone, and unsupported or oversized expressions fall back to readable TeX source. Not every TeX package is supported.
 
-Rendering happens locally. Formula rendering itself makes no model calls and does not submit expressions to a third-party rendering service. The resulting image is uploaded to Discord as part of the requested reply.
+Rendering happens locally. Table and formula rendering make no model calls and send no content to third-party rendering services. The resulting image is uploaded to Discord as part of the requested reply.
 
 ## Troubleshooting
 
