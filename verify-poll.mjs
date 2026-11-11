@@ -12,8 +12,8 @@ const hash=s=>createHash('sha256').update(typeof s==='string'?s.trim():s).digest
 const dir=await mkdtemp(join(tmpdir(),'relay-output-test-')),file=join(dir,'log.jsonl');
 try{
  await writeFile(file,'');const ino=(await stat(file)).ino;
- const state={test:{offset:0,ino,seen:[],inputs:[{hash:hash('我从 Discord 发来的消息')}]}},sent=[];
- const poll=build(state,async()=>{},stat,open,chatMessage,hash,{channels:{fetch:async()=>({})}},async(_c,text)=>{sent.push(...chunks(text));},async()=>{},timestamp);
+ const state={test:{offset:0,ino,seen:[],inputs:[{hash:hash('我从 Discord 发来的消息')}]}},sent=[],numbers=[];let failNext=false;
+ const poll=build(state,async()=>{},stat,open,chatMessage,hash,{channels:{fetch:async()=>({})}},async(_c,text,number)=>{if(failNext){failNext=false;throw Error('send fixture failed');}sent.push(...chunks(text));numbers.push(number);},async()=>{},timestamp);
  const b={channel:'test',target:{agent:'claude'},log:file};
  const record=(type,content,uuid)=>JSON.stringify({type,uuid,message:{content}})+'\n';
  const long='这是完整回复😀\n'.repeat(600);
@@ -24,5 +24,9 @@ try{
  await appendFile(file,bytes.subarray(0,split));await poll(b);assert.equal(sent.length,count);
  await appendFile(file,bytes.subarray(split));await poll(b);assert.equal(sent.at(-1),'后续中文回复');
  await appendFile(file,record('assistant','后续中文回复','a2'));await poll(b);assert.equal(sent.length,count+1);
+ assert.deepEqual(numbers,[1,2]);
+ await appendFile(file,record('assistant','Retry example','a3'));failNext=true;
+ await assert.rejects(()=>poll(b),/send fixture failed/);assert.equal(state.test.pendingReply.number,3);
+ await poll(b);assert.deepEqual(numbers,[1,2,3]);assert.equal(state.test.pendingReply,undefined);
  console.log('PASS: full long reply delivered, Discord input not echoed, internal notifications omitted, no replay after cursor checkpoint, split UTF-8 record preserved, duplicate record suppressed.');
 }finally{await rm(dir,{recursive:true});}

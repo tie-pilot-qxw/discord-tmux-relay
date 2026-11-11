@@ -13,6 +13,7 @@ The relay pastes your messages into the existing terminal and forwards new conve
 - Connect a channel to an existing tmux pane through a Discord picker.
 - Follow supported session changes and process restarts in that pane.
 - Keep new conversation messages in the same Discord channel.
+- Separate assistant replies with numbered headings; split replies share a reply number and part counts such as `1/3`, including tables and formula images.
 - Accept messages only from one configured Discord user in one configured server.
 - Format Markdown tables as aligned code blocks, splitting long tables with repeated headers.
 - Render supported TeX formulas into PNG attachments locally with MathJax and Sharp.
@@ -183,6 +184,8 @@ For several projects, use several channels and panes. A single directory can hav
 One pane can be connected to only one channel at a time in this implementation. To use a different pane, change the channel's connection through the picker.
 
 ### History and delivery semantics
+
+Each native assistant message gets a visible reply heading. If formatting splits it into several Discord messages, every part carries the same reply number and its position. Reply numbers persist across relay restarts and connection changes within the channel. They identify individual native messages, not an entire multi-message agent turn. Existing Discord history is not reformatted retroactively.
 
 - A new binding starts forwarding from the time it is connected. It does not import the entire old native conversation.
 - Existing Discord messages remain when you switch the connection. That channel can therefore contain several native sessions over time.

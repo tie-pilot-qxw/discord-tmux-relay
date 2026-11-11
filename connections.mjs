@@ -8,7 +8,7 @@ export function initialState(b,old){
  if(old&&old.bindingRevision===b.revision)return old;
  // Old bindings have no revision: retain their existing transcript cursor.
  if(old&&!b.revision)return old;
- return {bindingRevision:b.revision,offset:0,ino:null,seen:[],inputs:[],incoming:old?.incoming||{},lastChecked:b.connectedAt||Date.now()};
+ return {bindingRevision:b.revision,offset:0,ino:null,seen:[],inputs:[],incoming:old?.incoming||{},replyCounter:old?.replyCounter||0,lastChecked:b.connectedAt||Date.now()};
 }
 export async function atomicJson(path,value){await writeFile(path+'.tmp',JSON.stringify(value,null,2),{mode:0o600});await rename(path+'.tmp',path);}
 

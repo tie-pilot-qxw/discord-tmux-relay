@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {groupReply} from './reply-groups.mjs';
+import {discordPayloads} from './math.mjs';
+const file={attachment:Buffer.from('fixture'),name:'formula.png'};
+const parts=[{content:'First paragraph'},{content:'```text\nA | B\n1 | 2\n```'},{files:[file]}];
+const grouped=groupReply(parts,12,{label:'回复'});
+assert.equal(grouped.length,3);
+for(let i=0;i<3;i++)assert.ok(grouped[i].content.includes(`回复 12 · ${i+1}/3`));
+assert.ok(grouped[0].content.startsWith('**━━━━'));
+assert.ok(grouped[1].content.endsWith(parts[1].content));assert.equal(grouped[2].files[0],file);
+assert.equal(parts[0].content,'First paragraph');
+assert.ok(!groupReply([{content:'Next reply'}],13)[0].content.includes('1/1'));
+const text='Full response 中文 😀\n'.repeat(500),payloads=await discordPayloads(text),long=groupReply(payloads,100);
+assert.ok(long.every(p=>p.content.length<=2000));
+assert.equal(long.map(p=>p.content.slice(p.content.indexOf('\n\n')+2)).join(''),text);
+assert.throws(()=>groupReply([{content:'x'.repeat(2000)}],1));
+console.log('PASS: distinct reply boundaries, common numbering, chunk counts, intact table fences and image files, full long text and Discord limits.');
