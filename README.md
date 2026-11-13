@@ -198,6 +198,8 @@ Discord input replaces unsent terminal drafts, including multiline drafts. The r
 
 ### Model-specific avatars
 
+The [avatar gallery](assets/avatars/README.md) includes a dual-character server icon, Claude and Codex portraits, and the saved design variants with previews. Download individual PNGs there, or use the selected `assets/avatars/server.png`, `assets/avatars/claude.png`, and `assets/avatars/codex.png` files.
+
 Optionally set `"modelAvatars": true` in the relay data directory's `config.json`, and put your two PNG portraits in `avatars/claude.png` and `avatars/codex.png` under that same data directory. Grant the bot **Manage Webhooks** in the connected channels and restart the relay.
 
 Assistant replies then use separate bot-owned incoming webhooks named `Relay · Claude` and `Relay · Codex`, with display names Claude and Codex. The selected identity follows the model detected in the bound tmux pane, including switches within the same channel. Other channels and older messages keep their own identity. System notices, terminal-user echoes, and connection controls still come from the original bot. Threads use their parent channel's webhook. No extra model process is started.
