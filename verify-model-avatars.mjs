@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import {ModelAvatars} from './model-avatars.mjs';
+const calls=[],hooks=[],warnings=[];let creates=0,fetches=0;
+const channel={id:'channel-a',send:async p=>calls.push({via:'bot',p}),fetchWebhooks:async()=>{fetches++;return hooks;},createWebhook:async options=>{
+ creates++;const hook={type:1,name:options.name,owner:{id:'bot'},token:'fixture',send:async p=>calls.push({via:options.name,p})};hooks.push(hook);return hook;
+}};
+const make=(options={})=>new ModelAvatars({avatarDir:'/fixture',botId:()=> 'bot',enabled:()=>true,load:async()=>Buffer.from('avatar'),warn:(...v)=>warnings.push(v),...options});
+const sender=make(),file={attachment:Buffer.from('image'),name:'table.png'};
+await sender.send(channel,{content:'one',files:[file]},'claude');
+await sender.send(channel,{content:'two'},'codex');
+await sender.send(channel,{content:'three'},'claude');
+assert.deepEqual(calls.map(c=>c.via),['Relay · Claude','Relay · Codex','Relay · Claude']);assert.equal(creates,2);assert.equal(fetches,2);
+assert.equal(calls[0].p.files[0],file);assert.deepEqual(calls[0].p.allowedMentions,{parse:[]});
+await sender.send(channel,{content:'status'});assert.equal(calls.at(-1).via,'bot');
+await make({enabled:()=>false}).send(channel,{content:'disabled'},'claude');assert.equal(calls.at(-1).via,'bot');
+const thread={id:'thread',parent:channel,isThread:()=>true,send:channel.send};
+await sender.send(thread,{content:'thread'},'codex');assert.equal(calls.at(-1).p.threadId,'thread');
+const fresh=make();await Promise.all([fresh.webhook(channel,'claude'),fresh.webhook(channel,'claude')]);assert.equal(creates,2);
+// Foreign hooks with matching names must never be reused.
+const foreign={...channel,id:'foreign',fetchWebhooks:async()=>[{type:1,name:'Relay · Claude',owner:{id:'someone-else'},token:'x'}]};
+await make().webhook(foreign,'claude');assert.equal(creates,3);
+let deniedFetches=0;
+const denied={...channel,id:'denied',fetchWebhooks:async()=>{deniedFetches++;throw Object.assign(Error('permission'),{code:50013});}};
+const fallback=make();await fallback.send(denied,{content:'fallback'},'claude');await fallback.send(denied,{content:'again'},'claude');assert.equal(deniedFetches,1);assert.equal(calls.at(-1).via,'bot');
+const failing={...channel,id:'failing',fetchWebhooks:async()=>[{type:1,name:'Relay · Claude',owner:{id:'bot'},token:'x',send:async()=>{throw Object.assign(Error('deleted'),{code:10015});}}]};
+await make().send(failing,{content:'deleted'},'claude');assert.equal(calls.at(-1).via,'bot');
+failing.fetchWebhooks=async()=>[{type:1,name:'Relay · Claude',owner:{id:'bot'},token:'x',send:async()=>{throw Error('network timeout');}}];
+const count=calls.length;await assert.rejects(()=>make().send(failing,{content:'uncertain'},'claude'),/timeout/);assert.equal(calls.length,count);
+assert.ok(warnings.length);assert.ok(!JSON.stringify(warnings).includes('fixture'));
+console.log('PASS: model switching, isolated identities, attachments, threads, bot notices, webhook ownership/cache, missing permissions and nonduplicating error fallback.');

@@ -9,6 +9,7 @@ import {discover,adopt,timestamp} from './follow.mjs';
 import {ConnectionPicker,connectControls,initialState,atomicJson} from './connections.mjs';
 import {discordPayloads} from './math.mjs';
 import {groupReply} from './reply-groups.mjs';
+import {ModelAvatars} from './model-avatars.mjs';
 const dir=dataDir,cfg=JSON.parse(await readFile(join(dir,'config.json'),'utf8'));
 if(!/^\d{17,20}$/.test(cfg.owner)||!/^\d{17,20}$/.test(cfg.guild)||!Array.isArray(cfg.bindings))throw Error('Invalid config.json: run npm run init first.');
 const stateFile=join(dir,'state.json');let state=JSON.parse(await readFile(stateFile,'utf8').catch(()=>'{}'));
@@ -18,7 +19,8 @@ const client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.Gui
 const hash=s=>createHash('sha256').update(typeof s==='string'?s.trim():s).digest('hex');
 const queues=new Map();const serial=(key,fn)=>{const p=(queues.get(key)||Promise.resolve()).catch(()=>{}).then(fn);queues.set(key,p);return p;};
 const picker=new ConnectionPicker({cfg,persist:next=>atomicJson(join(dir,'config.json'),next)});
-async function post(channel,text,replyNumber){const parts=await discordPayloads(redact(text));for(const payload of replyNumber?groupReply(parts,replyNumber):parts)await channel.send({...payload,allowedMentions:{parse:[]}});}
+const modelAvatars=new ModelAvatars({avatarDir:join(dir,'avatars'),botId:()=>client.user.id,enabled:()=>cfg.modelAvatars===true});
+async function post(channel,text,replyNumber,agent){const parts=await discordPayloads(redact(text));for(const payload of replyNumber?groupReply(parts,replyNumber):parts)await modelAvatars.send(channel,payload,agent);}
 function info(b){if(!b)return 'This channel is not connected. Select a tmux pane with Connect terminal.';const a=state[b.channel]?.active;return `**Following tmux pane: ${b.location||b.target?.location}**\n${a?`Last identified: ${a.target.agent} · ${a.title}${a.id?`（…${a.id.slice(-8)}）`:''}`:'Waiting for the model to become ready.'}\nSend text directly. The relay follows supported session and process changes in this pane. Messages are not queued while the model is absent.\nUse Connect terminal to change panes or reconnect after a restart.`;}
 const connectionMessage=content=>({content:redact(content),components:connectControls(),allowedMentions:{parse:[]}});
 async function initBinding(b){
@@ -106,7 +108,7 @@ async function poll(b){
        if(s.pendingReply?.key!==key){s.replyCounter=(s.replyCounter||0)+1;s.pendingReply={key,number:s.replyCounter};await save();}
        replyNumber=s.pendingReply.number;
       }
-      await post(channel,(m.role==='user'?'**You (terminal)**\n':'')+m.text,replyNumber);delivered++;
+      await post(channel,(m.role==='user'?'**You (terminal)**\n':'')+m.text,replyNumber,m.role==='assistant'?b.target.agent:undefined);delivered++;
       if(replyNumber)delete s.pendingReply;
      }
      s.seen.push(id);if(s.seen.length>2000)s.seen.shift();

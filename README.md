@@ -196,6 +196,14 @@ Each native assistant message gets a visible reply heading. If formatting splits
 
 Discord input replaces unsent terminal drafts, including multiline drafts. The relay uses editing shortcuts and checks the result before submitting. It waits for slow terminal repaints and tracks blank-line removal as progress; an already blank Claude composer needs no clearing keys. Failed clearing logs contain layout counts only, never draft text. It does not send Escape or Ctrl+C to clear input, interrupt a running task, or answer an approval dialog. Custom keymaps or an unrecognized composer may prevent clearing; in that case the new message is not submitted. This policy applies to Discord messages from both mobile and desktop clients. The relay does not preserve a copy of the overwritten draft.
 
+### Model-specific avatars
+
+Optionally set `"modelAvatars": true` in the relay data directory's `config.json`, and put your two PNG portraits in `avatars/claude.png` and `avatars/codex.png` under that same data directory. Grant the bot **Manage Webhooks** in the connected channels and restart the relay.
+
+Assistant replies then use separate bot-owned incoming webhooks named `Relay · Claude` and `Relay · Codex`, with display names Claude and Codex. The selected identity follows the model detected in the bound tmux pane, including switches within the same channel. Other channels and older messages keep their own identity. System notices, terminal-user echoes, and connection controls still come from the original bot. Threads use their parent channel's webhook. No extra model process is started.
+
+The relay reuses its own matching webhooks across restarts; webhook tokens are held in memory and are never written into configuration or logs. If setup lacks permission or an avatar file, replies fall back to the ordinary bot. A network error during sending is not immediately resent as a bot message because delivery may already have occurred. To change a portrait later, edit that relay webhook's avatar in Discord's channel Integrations settings.
+
 ### Tables and formulas
 
 Pipe tables are rendered as PNG attachments so phone clients cannot reflow the columns. Tap an image to enlarge and pan. Long tables are paginated with repeated headers; exceptionally tall rows continue on the next page. Each table also includes its complete `.md` source for copying. Code examples are left unchanged. This is not an inline scrollable widget.
