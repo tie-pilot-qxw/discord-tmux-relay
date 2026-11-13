@@ -58,7 +58,7 @@ async function handleMessage(message){
   try{
    await save();
    const current=await refresh(b);s.inputs.push({hash:hash(redact(text)),at:Date.now()});await save();
-   await sendText(current.target,text,async()=>{const check=await discover(b);if(check.key!==current.key||check.target.pid!==current.target.pid||check.target.start!==current.target.start)throw Error('The terminal changed model or session. This message was not sent; check the terminal before retrying.');});
+   await sendText(current.target,text,async()=>{const check=await discover(b);if(check.key!==current.key||check.target.pid!==current.target.pid||check.target.start!==current.target.start)throw Error('The terminal changed model or session. This message was not sent; check the terminal before retrying.');},cfg.inputDiagnostics===true?join(dir,'diagnostics'):undefined);
    s.incoming[message.id]='sent';await message.react('✅').catch(()=>{});
   }
   catch(error){s.incoming[message.id]='blocked';s.inputs=s.inputs.filter(x=>x.hash!==hash(redact(text)));await message.reply({...storageError(error)?pauseMessage(error):connectionMessage('Terminal delivery was not confirmed: '+redact(error.message)+'\nCheck the terminal or reconnect before resending this message.'),allowedMentions:{parse:[],repliedUser:false}});}

@@ -1,3 +1,4 @@
+import {createInputDiagnostics} from './input-diagnostics.mjs';
 import {execFile,spawn} from 'node:child_process';
 import {promisify} from 'node:util';
 import {readFile,readlink} from 'node:fs/promises';
@@ -62,12 +63,19 @@ export async function pasteLiteral(pane,text){
  try{await tmux(['paste-buffer','-p','-d','-b',name,'-t',pane]);await new Promise(resolve=>setTimeout(resolve,180));await tmux(['send-keys','-t',pane,'Enter']);}
  finally{await tmux(['delete-buffer','-b',name]).catch(()=>{});}
 }
-export async function sendText(target,text,guard=async()=>{}){
+export async function sendText(target,text,guard=async()=>{},diagnosticsDir){
  if(/[\x00-\x08\x0b-\x1f\x7f]/.test(text))throw Error('Input contains terminal control characters and was not sent.');
- await prepareInputReplacement({agent:target.agent,readScreen:()=>screen(target),checkScreen:(view,options)=>inputBlockReason(view,target.agent,options),validate:()=>validateTarget(target),guard,sendKeys:keys=>tmux(['send-keys','-t',target.pane,...keys]),pause:()=>new Promise(resolve=>setTimeout(resolve,150))});
+ const diagnostics=createInputDiagnostics({dir:diagnosticsDir,target,redact,details:async()=>({cursorAndMode:(await tmux(['display-message','-p','-t',target.pane,'cursor=#{cursor_x},#{cursor_y} size=#{pane_width}x#{pane_height} in_mode=#{pane_in_mode} mode=#{pane_mode}'])).trim()})});
+ try{
+ await prepareInputReplacement({observe:diagnostics?.observe,agent:target.agent,readScreen:()=>screen(target),checkScreen:(view,options)=>inputBlockReason(view,target.agent,options),validate:()=>validateTarget(target),guard,sendKeys:keys=>tmux(['send-keys','-t',target.pane,...keys]),pause:()=>new Promise(resolve=>setTimeout(resolve,150))});
  await validateTarget(target);await guard();
- const check=await screen(target),reason=inputBlockReason(check,target.agent);if(reason)throw Error(reason);
+ const check=await screen(target),reason=inputBlockReason(check,target.agent);
+ if(reason){await diagnostics?.observe({view:check,phase:'final-check',reason}).catch(()=>{});throw Error(reason);}
  await pasteLiteral(target.pane,text);
+ }catch(error){
+  if(diagnostics)try{const id=await diagnostics.failed(error);console.warn('input-failure-diagnostic',JSON.stringify({id,agent:target.agent,pane:target.pane}));}catch{console.warn('input-diagnostic-write-failed');}
+  throw error;
+ }
 }
 export async function closeViewer(target){
  const view=await screen(target);

@@ -195,7 +195,15 @@ Each native assistant message gets a visible reply heading. If formatting splits
 - Failed state writes do not poison later saves. The relay checks storage before polling and retries checkpoints even when the transcript is idle. Storage notices clear only after polling and checkpointing succeed. A graceful service stop drains active channel work and attempts a final checkpoint; storage must be writable for that checkpoint to succeed.
 - Input blocked while the model is absent, unidentified, or in an unsupported UI state is not queued for automatic replay. Check the terminal before resending an input whose delivery is uncertain.
 
-Discord input replaces unsent terminal drafts, including multiline drafts. The relay uses editing shortcuts and checks the result before submitting. It waits for slow terminal repaints and tracks blank-line removal as progress; an already blank Claude composer needs no clearing keys. Failed clearing logs contain layout counts only, never draft text. It does not send Escape or Ctrl+C to clear input, interrupt a running task, or answer an approval dialog. Custom keymaps or an unrecognized composer may prevent clearing; in that case the new message is not submitted. This policy applies to Discord messages from both mobile and desktop clients. The relay does not preserve a copy of the overwritten draft.
+Discord input replaces unsent terminal drafts, including multiline drafts. The relay uses editing shortcuts and checks the result before submitting. It waits for slow terminal repaints and tracks blank-line removal as progress; an already blank Claude composer needs no clearing keys. Default journal logs contain layout counts only; optional private input diagnostics are described below. It does not send Escape or Ctrl+C to clear input, interrupt a running task, or answer an approval dialog. Custom keymaps or an unrecognized composer may prevent clearing; in that case the new message is not submitted. This policy applies to Discord messages from both mobile and desktop clients. The relay does not preserve a copy of the overwritten draft.
+
+### Optional input-failure diagnostics
+
+Set `"inputDiagnostics": true` in the relay data directory's `config.json` and restart the relay to diagnose composer detection or draft-clearing failures. This is disabled by default.
+
+On a failed send, `diagnostics/input-failures.jsonl` records the detected composer text and bounded surrounding border lines, Unicode code points, before/after clearing observations, cursor position, pane size and tmux mode. It does not capture the full terminal history or the outgoing Discord message. Successful attempts do not write diagnostic files. Credential-like strings pass through the relay's existing best-effort redaction.
+
+Records include the first and most recent observations (up to 12). Text fields are truncated, and the log rotates at 1 MiB with one previous file. The directory is restricted to its owner (`0700`) and files use `0600`. The service journal contains only a diagnostic ID and agent/pane identifiers. The diagnostics directory is ignored by Git; do not publish it as part of a bug report without reviewing its contents. Disable the option and restart when investigation is complete.
 
 ### Model-specific avatars
 
