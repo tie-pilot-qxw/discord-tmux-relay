@@ -28,5 +28,16 @@ try{
  await appendFile(file,record('assistant','Retry example','a3'));failNext=true;
  await assert.rejects(()=>poll(b),/send fixture failed/);assert.equal(state.test.pendingReply.number,3);
  await poll(b);assert.deepEqual(numbers,[1,2,3]);assert.equal(state.test.pendingReply,undefined);
+ // A pending reply left by a failed checkpoint must checkpoint again before
+ // delivery, and a failure after delivery must not resend that reply in-process.
+ const delivered=[],recoveryState={test:{offset:(await stat(file)).size,ino,seen:[],inputs:[]}};
+ let diskFull=true,failAfterPost=false;
+ const recoveryPoll=build(recoveryState,async()=>{},stat,open,chatMessage,hash,{channels:{fetch:async()=>({})}},async(_c,text)=>{delivered.push(text);if(failAfterPost){failAfterPost=false;diskFull=true;}},async()=>{if(diskFull)throw Object.assign(Error('disk full'),{code:'ENOSPC'});},timestamp);
+ await appendFile(file,record('assistant','Checkpoint retry','a4'));
+ await assert.rejects(()=>recoveryPoll(b),/disk full/);await assert.rejects(()=>recoveryPoll(b),/disk full/);assert.deepEqual(delivered,[]);
+ diskFull=false;await recoveryPoll(b);assert.deepEqual(delivered,['Checkpoint retry']);
+ await appendFile(file,record('assistant','Delivered before checkpoint failure','a5'));failAfterPost=true;
+ await assert.rejects(()=>recoveryPoll(b),/disk full/);assert.equal(delivered.length,2);
+ diskFull=false;await recoveryPoll(b);assert.equal(delivered.length,2);
  console.log('PASS: full long reply delivered, Discord input not echoed, internal notifications omitted, no replay after cursor checkpoint, split UTF-8 record preserved, duplicate record suppressed.');
 }finally{await rm(dir,{recursive:true});}
