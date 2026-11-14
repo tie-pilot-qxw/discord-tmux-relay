@@ -1,5 +1,14 @@
 // Claude uses the same prompt marker in its composer and background-agent list.
 // Prefer the composer bounded by horizontal rules, not the last marker on screen.
+export function claudeInputContext(text){
+ const input=findInputArea(text,'claude');
+ if(!input?.framed)return null;
+ const footer=text.split('\n').slice(input.index+input.lineCount+1);
+ // Inspect only the real composer/footer, never quoted conversation text.
+ if(footer.some(line=>/^\s*(?:↑\/↓ to select|Enter to view\s*·\s*x to stop)(?:\s|$)/.test(line)))return 'agent-picker';
+ if(/^Message @[^\n]+(?:…|\.\.\.)$/.test(input.draft)||footer.some(line=>/^\s*●\s+(?!main(?:\s|$))\S+/.test(line)))return 'subagent';
+ return null;
+}
 export function findInputArea(text,agent){
  const lines=text.split('\n');
  const marker=agent==='claude'?/^❯(?:[\s\u00a0]|$)/:/^›(?:[\s\u00a0]|$)/;

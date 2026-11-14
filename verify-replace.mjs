@@ -35,3 +35,20 @@ const delayed=await fixture({draft:'old\nsecond\nthird',delayReads:6});await del
 console.log('PASS: slow repaint waits without queued edits; blank-line progress is recognized; empty Claude input needs no edits.');
 
 for(const draft of ['\n'.repeat(24),'first\n'+'\n'.repeat(24)+'last'])for(const cursor of [0,draft.length]){const f=await fixture({draft,cursor});await f.run();assert.equal(f.value,'');}
+
+// Regression: native agent picker placeholders are not drafts. Never clear or
+// submit into a picker/subagent, including a subagent with a real typed draft.
+for(const [body,footer] of [
+ ['Message @general-purpose…','  ↑/↓ to select · ctrl+x ctrl+k to stop all agents\n  ◯ main\n❯ ● general-purpose  Working'],
+ ['','  ↑/↓ to select · Enter to view\n❯ ◯ main\n  ● general-purpose  Working'],
+ ['Message @general-purpose…','  Enter to view · x to stop · ctrl+x ctrl+k to stop all agents\n  ◯ main\n❯ ● general-purpose  Working'],
+ ['real subagent draft','  permissions enabled\n  ◯ main\n  ● general-purpose  Working'],
+ ['Message @general-purpose…','  permissions enabled']
+]){
+ const screen=`─────────────────\n❯ ${body}\n─────────────────\n${footer}`;
+ let edits=0;
+ await assert.rejects(()=>prepareInputReplacement({agent:'claude',readScreen:async()=>screen,checkScreen:(v,o)=>inputBlockReason(v,'claude',o),validate:async()=>{},guard:async()=>{},pause:async()=>{},sendKeys:async()=>{edits++;}}));
+ assert.equal(edits,0,'Picker/subagent must block before any editing key');
+}
+assert.equal(inputBlockReason('Old quoted text: Message @general-purpose…\n↑/↓ to select\n'+frame(''),'claude'),null);
+console.log('PASS: agent picker/subagent input blocks before editing; quoted history does not block main.');

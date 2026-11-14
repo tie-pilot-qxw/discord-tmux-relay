@@ -3,7 +3,7 @@ import {execFile,spawn} from 'node:child_process';
 import {promisify} from 'node:util';
 import {readFile,readlink} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
-import {findInputArea} from './input-area.mjs';
+import {findInputArea,claudeInputContext} from './input-area.mjs';
 import {prepareInputReplacement,isInputPlaceholder} from './replace-input.mjs';
 const exec=promisify(execFile);
 export async function tmux(args){return (await exec('tmux',args,{maxBuffer:4*1024*1024,timeout:5000})).stdout;}
@@ -50,6 +50,11 @@ export async function validateTarget(target){
 }
 export async function screen(target){await validateTarget(target);return redact(await tmux(['capture-pane','-p','-t',target.pane]));}
 export function inputBlockReason(text,agent,{allowDraft=false}={}){
+ if(agent==='claude'){
+  const context=claudeInputContext(text);
+  if(context==='agent-picker')return 'Claude is focused on the agent picker. Return to the main conversation input. Reconnecting the pane will not close this picker.';
+  if(context==='subagent')return 'Claude is viewing a subagent. Return to main before sending. Message @… is a placeholder, not an uncleared draft.';
+ }
  if(/esc (?:to )?close|escape (?:to )?close|enter copy|enter to (?:confirm|select)|Do you want to proceed|Allow .*(?:once|always)/i.test(text))return 'The terminal has an open dialog or selection prompt. Handle it in the terminal first.';
  const prompt=findInputArea(text,agent);if(!prompt)return 'No supported model input prompt found. Check the terminal; input was not sent.';
  const draft=prompt.draft;
