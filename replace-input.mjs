@@ -7,7 +7,7 @@ export function isInputPlaceholder(text){
 // Use editing keys only. Escape/Ctrl+C could interrupt the agent, and Ctrl+D
 // could exit it. A bounded loop clears both sides of an arbitrary cursor and
 // crosses logical newlines without submitting the old draft.
-export async function prepareInputReplacement({agent,readScreen,checkScreen,validate,guard,sendKeys,pause,maxPasses=64,settleReads=8,observe=null}){
+export async function prepareInputReplacement({agent,readScreen,checkScreen,validate,guard,sendKeys,pause,maxPasses=64,settleReads=8,observe=null,isSuggestion=()=>false}){
  let unchanged=0,last=null;
  const record=async sample=>{try{await observe?.(sample);}catch{}};
  const signature=input=>JSON.stringify([input?.draft,input?.lineCount,input?.framed]);
@@ -21,7 +21,7 @@ export async function prepareInputReplacement({agent,readScreen,checkScreen,vali
   if(agent==='claude'&&!before?.framed)throw Error('Cannot identify the Claude composer boundaries. No draft was replaced.');
   // A visibly blank, bounded composer needs no editing. Placeholder-shaped
   // text still goes through normalization because it may be a real draft.
-  if(agent==='claude'&&before.lineCount===1&&!before.draft)return;
+  if(agent==='claude'&&(before.lineCount===1&&!before.draft||isSuggestion(view)))return;
   // Normalize even a placeholder-looking draft once: actual user text can
   // equal a placeholder, so text matching alone must never bypass deletion.
   await validate();await guard();await sendKeys(['C-a','C-k','C-u']);
@@ -33,7 +33,7 @@ export async function prepareInputReplacement({agent,readScreen,checkScreen,vali
    const next=await readScreen(),blocked=checkScreen(next,{allowDraft:true});
    if(blocked){await record({view:next,phase:'blocked-after-clear',pass,reason:blocked});throw Error(blocked);}
    lastView=next;input=findInputArea(next,agent);
-   if(empty(input))return;
+   if(empty(input)||agent==='claude'&&isSuggestion(next))return;
    if(signature(input)!==signature(before))break;
   }
   // Codex renders its placeholder only when the entire buffer is empty; a
@@ -45,5 +45,5 @@ export async function prepareInputReplacement({agent,readScreen,checkScreen,vali
  }
  // The journal retains metrics only; opt-in private diagnostics capture composer text.
  console.warn('input-clear-unconfirmed',JSON.stringify({agent,lineCount:last?.lineCount,draftChars:last?.draft?.length,framed:last?.framed,unchanged}));
- throw Error('Unable to confirm that the draft is empty. The new message was not sent.');
+ throw Error(agent==='claude'?'无法确认草稿已清空，新消息尚未发送。':'Unable to confirm that the draft is empty. The new message was not sent.');
 }

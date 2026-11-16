@@ -302,10 +302,8 @@ systemctl --user disable --now discord-tmux-relay.service
 Stopping or restarting this service does not stop the model or its tmux pane. Runtime state lives outside the repository; do not delete it during an ordinary update.
 
 
-### Claude prompt suggestions and false draft warnings
+### Claude prompt suggestions and draft detection
 
-Claude can display a generated next-prompt suggestion inside an otherwise empty composer. A plain terminal capture loses its gray styling, so the relay may mistake that suggestion for a draft that editing keys cannot clear. To avoid this, merge `"promptSuggestionEnabled": false` into the connected project's `.claude/settings.local.json`, preserving any existing settings. Claude normally reloads settings changes without restarting; `CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=true` takes precedence, so check that environment override if suggestions persist.
+Prompt suggestions can remain enabled. The relay reads terminal styling along with cursor position, rather than treating every visible word as editable input. It recognizes a suggestion only when the bounded main composer contains entirely dim text and a stable, visible cursor is at the empty input position. A real prefix, an accepted suggestion, an agent picker, an inactive composer, or ambiguous cursor state is not treated as a suggestion. The final pre-send check also handles a suggestion that appears after the draft was cleared.
 
-Do not whitelist the suggestion's text or bypass draft checks. With input diagnostics enabled, failures now include bounded SGR style metadata and whether its separate capture matched the observed draft. This helps distinguish suggestions from real text without storing an additional terminal transcript. The relay still does not automatically replay blocked messages.
-
-See [Claude prompt suggestions](https://code.claude.com/docs/en/interactive-mode#prompt-suggestions).
+Input diagnostics include bounded style metadata so a changed terminal theme or renderer can be investigated. Unknown styling remains conservative; the relay does not whitelist suggestion words or automatically replay failed messages. This feature does not change Claude's settings.

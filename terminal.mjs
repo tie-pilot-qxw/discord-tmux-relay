@@ -1,3 +1,4 @@
+import {inspectRenderedInput} from './rendered-input.mjs';
 import {createInputDiagnostics,inputAppearance} from './input-diagnostics.mjs';
 import {execFile,spawn} from 'node:child_process';
 import {promisify} from 'node:util';
@@ -49,7 +50,18 @@ export async function validateTarget(target){
  return identity;
 }
 export async function screen(target){await validateTarget(target);return redact(await tmux(['capture-pane','-p','-t',target.pane]));}
-export function inputBlockReason(text,agent,{allowDraft=false}={}){
+// A single tmux command reads cursor state around the styled capture. If the
+// cursor moves during capture, suggestions are not trusted on that read.
+export async function inputScreen(target){
+ if(target.agent!=='claude')return {text:await screen(target),suggestion:false};
+ await validateTarget(target);
+ const fmt='#{cursor_x},#{cursor_y},#{pane_in_mode},#{cursor_flag}';
+ const raw=await tmux(['display-message','-p','-t',target.pane,fmt,';','capture-pane','-p','-e','-t',target.pane,';','display-message','-p','-t',target.pane,fmt]);
+ const lines=raw.trimEnd().split('\n'),before=lines.shift(),after=lines.pop();
+ const result=inspectRenderedInput(lines.join('\n'),{before,after});
+ return {...result,text:redact(result.text)};
+}
+export function inputBlockReason(text,agent,{allowDraft=false,suggestion=false}={}){
  if(agent==='claude'){
   const context=claudeInputContext(text);
   if(context==='agent-picker')return 'Claude is focused on the agent picker. Return to the main conversation input. Reconnecting the pane will not close this picker.';
@@ -58,7 +70,7 @@ export function inputBlockReason(text,agent,{allowDraft=false}={}){
  if(/esc (?:to )?close|escape (?:to )?close|enter copy|enter to (?:confirm|select)|Do you want to proceed|Allow .*(?:once|always)/i.test(text))return 'The terminal has an open dialog or selection prompt. Handle it in the terminal first.';
  const prompt=findInputArea(text,agent);if(!prompt)return 'No supported model input prompt found. Check the terminal; input was not sent.';
  const draft=prompt.draft;
- if(draft&&!allowDraft&&!isInputPlaceholder(draft))return 'The terminal contains a draft that has not been cleared.';
+ if(draft&&!allowDraft&&!(agent==='claude'&&suggestion)&&!isInputPlaceholder(draft))return 'The terminal contains a draft that has not been cleared.';
  return null;
 }
 export async function pasteLiteral(pane,text){
@@ -72,9 +84,11 @@ export async function sendText(target,text,guard=async()=>{},diagnosticsDir){
  if(/[\x00-\x08\x0b-\x1f\x7f]/.test(text))throw Error('Input contains terminal control characters and was not sent.');
  const diagnostics=createInputDiagnostics({dir:diagnosticsDir,target,redact,details:async({input})=>({cursorAndMode:(await tmux(['display-message','-p','-t',target.pane,'cursor=#{cursor_x},#{cursor_y} size=#{pane_width}x#{pane_height} in_mode=#{pane_in_mode} mode=#{pane_mode}'])).trim(),appearance:inputAppearance(await tmux(['capture-pane','-p','-e','-t',target.pane]),target.agent,input?.draft)})});
  try{
- await prepareInputReplacement({observe:diagnostics?.observe,agent:target.agent,readScreen:()=>screen(target),checkScreen:(view,options)=>inputBlockReason(view,target.agent,options),validate:()=>validateTarget(target),guard,sendKeys:keys=>tmux(['send-keys','-t',target.pane,...keys]),pause:()=>new Promise(resolve=>setTimeout(resolve,150))});
+ let latest;
+ const isSuggestion=view=>latest?.text===view&&latest.suggestion===true;
+ await prepareInputReplacement({observe:diagnostics?.observe,agent:target.agent,readScreen:async()=>{latest=await inputScreen(target);return latest.text;},isSuggestion,checkScreen:(view,options)=>inputBlockReason(view,target.agent,{...options,suggestion:isSuggestion(view)}),validate:()=>validateTarget(target),guard,sendKeys:keys=>tmux(['send-keys','-t',target.pane,...keys]),pause:()=>new Promise(resolve=>setTimeout(resolve,150))});
  await validateTarget(target);await guard();
- const check=await screen(target),reason=inputBlockReason(check,target.agent);
+ const final=await inputScreen(target),check=final.text,reason=inputBlockReason(check,target.agent,{suggestion:final.suggestion});
  if(reason){await diagnostics?.observe({view:check,phase:'final-check',reason}).catch(()=>{});throw Error(reason);}
  await pasteLiteral(target.pane,text);
  }catch(error){
