@@ -300,3 +300,12 @@ systemctl --user disable --now discord-tmux-relay.service
 ```
 
 Stopping or restarting this service does not stop the model or its tmux pane. Runtime state lives outside the repository; do not delete it during an ordinary update.
+
+
+### Claude prompt suggestions and false draft warnings
+
+Claude can display a generated next-prompt suggestion inside an otherwise empty composer. A plain terminal capture loses its gray styling, so the relay may mistake that suggestion for a draft that editing keys cannot clear. To avoid this, merge `"promptSuggestionEnabled": false` into the connected project's `.claude/settings.local.json`, preserving any existing settings. Claude normally reloads settings changes without restarting; `CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=true` takes precedence, so check that environment override if suggestions persist.
+
+Do not whitelist the suggestion's text or bypass draft checks. With input diagnostics enabled, failures now include bounded SGR style metadata and whether its separate capture matched the observed draft. This helps distinguish suggestions from real text without storing an additional terminal transcript. The relay still does not automatically replay blocked messages.
+
+See [Claude prompt suggestions](https://code.claude.com/docs/en/interactive-mode#prompt-suggestions).

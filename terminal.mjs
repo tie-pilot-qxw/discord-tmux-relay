@@ -1,4 +1,4 @@
-import {createInputDiagnostics} from './input-diagnostics.mjs';
+import {createInputDiagnostics,inputAppearance} from './input-diagnostics.mjs';
 import {execFile,spawn} from 'node:child_process';
 import {promisify} from 'node:util';
 import {readFile,readlink} from 'node:fs/promises';
@@ -70,7 +70,7 @@ export async function pasteLiteral(pane,text){
 }
 export async function sendText(target,text,guard=async()=>{},diagnosticsDir){
  if(/[\x00-\x08\x0b-\x1f\x7f]/.test(text))throw Error('Input contains terminal control characters and was not sent.');
- const diagnostics=createInputDiagnostics({dir:diagnosticsDir,target,redact,details:async()=>({cursorAndMode:(await tmux(['display-message','-p','-t',target.pane,'cursor=#{cursor_x},#{cursor_y} size=#{pane_width}x#{pane_height} in_mode=#{pane_in_mode} mode=#{pane_mode}'])).trim()})});
+ const diagnostics=createInputDiagnostics({dir:diagnosticsDir,target,redact,details:async({input})=>({cursorAndMode:(await tmux(['display-message','-p','-t',target.pane,'cursor=#{cursor_x},#{cursor_y} size=#{pane_width}x#{pane_height} in_mode=#{pane_in_mode} mode=#{pane_mode}'])).trim(),appearance:inputAppearance(await tmux(['capture-pane','-p','-e','-t',target.pane]),target.agent,input?.draft)})});
  try{
  await prepareInputReplacement({observe:diagnostics?.observe,agent:target.agent,readScreen:()=>screen(target),checkScreen:(view,options)=>inputBlockReason(view,target.agent,options),validate:()=>validateTarget(target),guard,sendKeys:keys=>tmux(['send-keys','-t',target.pane,...keys]),pause:()=>new Promise(resolve=>setTimeout(resolve,150))});
  await validateTarget(target);await guard();

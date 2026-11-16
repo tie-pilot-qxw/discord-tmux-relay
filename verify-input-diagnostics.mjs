@@ -33,3 +33,13 @@ try{
  await prepareInputReplacement({agent:'claude',readScreen:async()=>'────────────\n❯ \n────────────',checkScreen:()=>null,validate:async()=>{},guard:async()=>{},sendKeys:async()=>assert.fail('empty composer must not get keys'),pause:async()=>{},observe:async()=>{throw Error('diagnostics unavailable');}});
  console.log('PASS: exact composer and Unicode capture, cursor/mode metadata, bounded snapshots, failure-only persistence, redaction, rotation and diagnostic failures isolated.');
 }finally{await rm(root,{recursive:true});}
+
+const {inputAppearance}=await import('./input-diagnostics.mjs');
+const styled='─────────────────\n❯ \x1b[2m\x1b[37mA private suggestion\x1b[0m\n─────────────────';
+const appearance=inputAppearance(styled,'claude','A private suggestion');
+assert.equal(appearance.sameDraft,true);
+assert.deepEqual(appearance.styles[0].slice(0,2),[{offset:2,sgr:'2'},{offset:2,sgr:'37'}]);
+assert.equal(JSON.stringify(appearance).includes('private'),false);
+assert.equal(inputAppearance(styled,'claude','different').sameDraft,false);
+assert.equal(inputAppearance('no composer','claude','').found,false);
+console.log('PASS: input styling is captured without content; separate-capture mismatches are explicit.');

@@ -4,6 +4,23 @@ import {randomUUID} from 'node:crypto';
 import {findInputArea} from './input-area.mjs';
 
 let writing=Promise.resolve();
+// Keep styling evidence without copying an additional terminal transcript.
+// Plain captures erase the distinction between actual input and ghost suggestions.
+export function inputAppearance(raw,agent,expectedDraft){
+ const ansi=/\x1b\[[0-?]*[ -/]*[@-~]/g;
+ const plain=raw.replace(ansi,''),input=findInputArea(plain,agent);
+ if(!input)return {found:false};
+ const lines=raw.split('\n');
+ return {found:true,row:input.index,lineCount:input.lineCount,sameDraft:input.draft===expectedDraft,
+  styles:lines.slice(input.index,input.index+Math.min(input.lineCount,12)).map(line=>{
+   let removed=0;const spans=[];
+   for(const m of line.matchAll(/\x1b\[[0-9;:]*m/g)){
+    spans.push({offset:m.index-removed,sgr:m[0].slice(2,-1)});removed+=m[0].length;
+    if(spans.length>=128)break;
+   }
+   return spans;
+  })};
+}
 export function createInputDiagnostics({dir,target,redact=s=>s,details=async()=>({})}){
  if(!dir)return null;
  const id=randomUUID(),startedAt=new Date().toISOString(),snapshots=[];
@@ -11,7 +28,7 @@ export function createInputDiagnostics({dir,target,redact=s=>s,details=async()=>
  return {
   async observe({view,phase,pass,reason}){
    const input=findInputArea(view,target.agent),lines=view.split('\n');
-   const draft=clean(input?.draft),extra=await details().catch(()=>({unavailable:true}));
+   const draft=clean(input?.draft),extra=await details({view,input}).catch(()=>({unavailable:true}));
    const sample={at:new Date().toISOString(),phase,pass,reason:reason?clean(reason):null,
     input:input?{row:input.index,lineCount:input.lineCount,framed:input.framed,draftChars:input.draft.length,draft,
      codePoints:[...draft].slice(0,128).map(c=>'U+'+c.codePointAt(0).toString(16).toUpperCase().padStart(4,'0')),
