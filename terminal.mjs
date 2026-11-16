@@ -4,7 +4,7 @@ import {execFile,spawn} from 'node:child_process';
 import {promisify} from 'node:util';
 import {readFile,readlink} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
-import {findInputArea,claudeInputContext} from './input-area.mjs';
+import {findInputArea,claudeInputContext,modalEvidence} from './input-area.mjs';
 import {prepareInputReplacement,isInputPlaceholder} from './replace-input.mjs';
 const exec=promisify(execFile);
 export async function tmux(args){return (await exec('tmux',args,{maxBuffer:4*1024*1024,timeout:5000})).stdout;}
@@ -61,13 +61,13 @@ export async function inputScreen(target){
  const result=inspectRenderedInput(lines.join('\n'),{before,after});
  return {...result,text:redact(result.text)};
 }
-export function inputBlockReason(text,agent,{allowDraft=false,suggestion=false}={}){
+export function inputBlockReason(text,agent,{allowDraft=false,suggestion=false,composerFocused=false}={}){
  if(agent==='claude'){
   const context=claudeInputContext(text);
   if(context==='agent-picker')return 'Claude is focused on the agent picker. Return to the main conversation input. Reconnecting the pane will not close this picker.';
   if(context==='subagent')return 'Claude is viewing a subagent. Return to main before sending. Message @… is a placeholder, not an uncleared draft.';
  }
- if(/esc (?:to )?close|escape (?:to )?close|enter copy|enter to (?:confirm|select)|Do you want to proceed|Allow .*(?:once|always)/i.test(text))return 'The terminal has an open dialog or selection prompt. Handle it in the terminal first.';
+ if(modalEvidence(text,agent,{composerFocused}))return 'The terminal has an open dialog or selection prompt. Handle it in the terminal first.';
  const prompt=findInputArea(text,agent);if(!prompt)return 'No supported model input prompt found. Check the terminal; input was not sent.';
  const draft=prompt.draft;
  if(draft&&!allowDraft&&!(agent==='claude'&&suggestion)&&!isInputPlaceholder(draft))return 'The terminal contains a draft that has not been cleared.';
@@ -82,13 +82,13 @@ export async function pasteLiteral(pane,text){
 }
 export async function sendText(target,text,guard=async()=>{},diagnosticsDir){
  if(/[\x00-\x08\x0b-\x1f\x7f]/.test(text))throw Error('Input contains terminal control characters and was not sent.');
- const diagnostics=createInputDiagnostics({dir:diagnosticsDir,target,redact,details:async({input})=>({cursorAndMode:(await tmux(['display-message','-p','-t',target.pane,'cursor=#{cursor_x},#{cursor_y} size=#{pane_width}x#{pane_height} in_mode=#{pane_in_mode} mode=#{pane_mode}'])).trim(),appearance:inputAppearance(await tmux(['capture-pane','-p','-e','-t',target.pane]),target.agent,input?.draft)})});
- try{
  let latest;
+ const diagnostics=createInputDiagnostics({dir:diagnosticsDir,target,redact,details:async({view,input})=>({composerFocused:latest?.text===view&&latest.composerFocused===true,suggestion:latest?.text===view&&latest.suggestion===true,modal:modalEvidence(redact(view),target.agent,{composerFocused:latest?.text===view&&latest.composerFocused===true}),cursorAndMode:(await tmux(['display-message','-p','-t',target.pane,'cursor=#{cursor_x},#{cursor_y} size=#{pane_width}x#{pane_height} in_mode=#{pane_in_mode} mode=#{pane_mode}'])).trim(),appearance:inputAppearance(await tmux(['capture-pane','-p','-e','-t',target.pane]),target.agent,input?.draft)})});
+ try{
  const isSuggestion=view=>latest?.text===view&&latest.suggestion===true;
- await prepareInputReplacement({observe:diagnostics?.observe,agent:target.agent,readScreen:async()=>{latest=await inputScreen(target);return latest.text;},isSuggestion,checkScreen:(view,options)=>inputBlockReason(view,target.agent,{...options,suggestion:isSuggestion(view)}),validate:()=>validateTarget(target),guard,sendKeys:keys=>tmux(['send-keys','-t',target.pane,...keys]),pause:()=>new Promise(resolve=>setTimeout(resolve,150))});
+ await prepareInputReplacement({observe:diagnostics?.observe,agent:target.agent,readScreen:async()=>{latest=await inputScreen(target);return latest.text;},isSuggestion,checkScreen:(view,options)=>inputBlockReason(view,target.agent,{...options,suggestion:isSuggestion(view),composerFocused:latest?.text===view&&latest.composerFocused===true}),validate:()=>validateTarget(target),guard,sendKeys:keys=>tmux(['send-keys','-t',target.pane,...keys]),pause:()=>new Promise(resolve=>setTimeout(resolve,150))});
  await validateTarget(target);await guard();
- const final=await inputScreen(target),check=final.text,reason=inputBlockReason(check,target.agent,{suggestion:final.suggestion});
+ latest=await inputScreen(target);const check=latest.text,reason=inputBlockReason(check,target.agent,{suggestion:latest.suggestion,composerFocused:latest.composerFocused});
  if(reason){await diagnostics?.observe({view:check,phase:'final-check',reason}).catch(()=>{});throw Error(reason);}
  await pasteLiteral(target.pane,text);
  }catch(error){

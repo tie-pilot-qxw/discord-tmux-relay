@@ -1,5 +1,17 @@
 // Claude uses the same prompt marker in its composer and background-agent list.
 // Prefer the composer bounded by horizontal rules, not the last marker on screen.
+export function modalEvidence(text,agent,{composerFocused=false}={}){
+ const input=findInputArea(text,agent),lines=text.split('\n');
+ // Only a stable visible caret in the main Claude composer proves that text
+ // above it is conversation output, rather than the current selection dialog.
+ const scoped=agent==='claude'&&composerFocused&&input?.framed&&!claudeInputContext(text);
+ const start=scoped?input.index+input.lineCount+1:0;
+ const rules=[['close-viewer',/esc (?:to )?close|escape (?:to )?close|enter copy/i],['confirm-selection',/enter to (?:confirm|select)/i],['approval-question',/Do you want to proceed/i],['approval-choice',/Allow .*(?:once|always)/i]];
+ for(let row=start;row<lines.length;row++)for(const [rule,pattern] of rules){
+  if(pattern.test(lines[row]))return {row,region:scoped?'composer-footer':'screen',rule,excerpt:lines[row].slice(0,240)};
+ }
+ return null;
+}
 export function claudeInputContext(text){
  const input=findInputArea(text,'claude');
  if(!input?.framed)return null;

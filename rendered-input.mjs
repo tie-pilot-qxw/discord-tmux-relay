@@ -34,12 +34,15 @@ function styledLines(raw){
 
 export function inspectRenderedInput(raw,{before,after}={}){
  const text=stripVTControlCharacters(raw),input=findInputArea(text,'claude');
- const result={text,input,suggestion:false};
+ const result={text,input,suggestion:false,composerFocused:false};
  if(/\x1b(?!\[[0-9;:]*m)/.test(raw))return result;
  // Require a live, stable cursor at the empty input position. Dim text in a
  // viewer, picker, inactive composer, or after a real prefix is not evidence.
- if(!input?.framed||!input.draft||claudeInputContext(text)||!before||before!==after)return result;
+ if(!input?.framed||claudeInputContext(text)||!before||before!==after)return result;
  const [x,y,inMode,visible]=before.split(',').map(Number);
+ if(![x,y,inMode,visible].every(Number.isInteger))return result;
+ result.composerFocused=inMode===0&&visible===1&&y>=input.index&&y<input.index+input.lineCount&&x>=(y===input.index?2:0);
+ if(!input.draft)return result;
  if(x!==2||y!==input.index||inMode!==0||visible!==1)return result;
  if(!/^❯[ \u00a0]/.test(text.split('\n')[input.index]))return result;
  const styles=styledLines(raw),lines=text.split('\n');let count=0;

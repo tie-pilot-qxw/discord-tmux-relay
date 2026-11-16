@@ -47,3 +47,28 @@ for(const startsAsDraft of [false,true]){
  assert.ok(inputBlockReason(accepted.text,'claude',{suggestion:accepted.suggestion}));
 }
 console.log('PASS: styled suggestions vs identical real drafts, real prefixes, cursor/focus guards, multiline/Unicode, late suggestions and accepted suggestions.');
+
+const {modalEvidence}=await import('./input-area.mjs');
+for(const phrase of ['Enter to confirm','Esc to close','Do you want to proceed?','Allow this operation once']){
+ const raw=frame('').replace('prior output',`The assistant explained: ${phrase}`);
+ const focused=inspectRenderedInput(raw,atStart);
+ assert.equal(focused.composerFocused,true);
+ assert.equal(inputBlockReason(focused.text,'claude',{composerFocused:focused.composerFocused}),null);
+ assert.equal(modalEvidence(focused.text,'claude',{composerFocused:true}),null);
+ for(const cursor of ['2,0,0,1','2,2,0,0','2,2,1,1']){
+  const dialog=inspectRenderedInput(raw,{before:cursor,after:cursor});
+  assert.equal(dialog.composerFocused,false);
+  assert.ok(inputBlockReason(dialog.text,'claude',{composerFocused:dialog.composerFocused}));
+ }
+ const footer=raw+'\n'+phrase;
+ assert.ok(inputBlockReason(footer,'claude',{composerFocused:true}));
+ assert.equal(modalEvidence(footer,'claude',{composerFocused:true}).region,'composer-footer');
+}
+const literal=probe('Please explain Enter to confirm');
+assert.equal(literal.composerFocused,true);
+assert.equal(inputBlockReason(literal.text,'claude',{composerFocused:true,allowDraft:true}),null);
+assert.ok(inputBlockReason(literal.text,'claude',{composerFocused:true}),'real draft protection remains');
+const changed=probe('',{before:'2,2,0,1',after:'2,1,0,1'});
+assert.equal(changed.composerFocused,false);
+assert.ok(inputBlockReason('Enter to confirm\n› Ask Codex to do anything','codex',{composerFocused:true}),'Codex behavior is unchanged');
+console.log('PASS: modal words in history/input do not block a verified main composer; actual dialogs, footer controls, unstable/hidden cursors still block.');

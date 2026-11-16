@@ -307,3 +307,6 @@ Stopping or restarting this service does not stop the model or its tmux pane. Ru
 Prompt suggestions can remain enabled. The relay reads terminal styling along with cursor position, rather than treating every visible word as editable input. It recognizes a suggestion only when the bounded main composer contains entirely dim text and a stable, visible cursor is at the empty input position. A real prefix, an accepted suggestion, an agent picker, an inactive composer, or ambiguous cursor state is not treated as a suggestion. The final pre-send check also handles a suggestion that appears after the draft was cleared.
 
 Input diagnostics include bounded style metadata so a changed terminal theme or renderer can be investigated. Unknown styling remains conservative; the relay does not whitelist suggestion words or automatically replay failed messages. This feature does not change Claude's settings.
+
+
+When a stable, visible cursor is inside the main Claude composer, dialog keywords in earlier conversation text or the draft itself do not count as a modal. Footer controls still block input. Without positive composer-focus evidence, the conservative whole-screen check remains. Private failure diagnostics include the matched rule, row, and a bounded excerpt, so a dialog warning can be traced to the text that triggered it.
