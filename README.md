@@ -310,3 +310,14 @@ Input diagnostics include bounded style metadata so a changed terminal theme or 
 
 
 When a stable, visible cursor is inside the main Claude composer, dialog keywords in earlier conversation text or the draft itself do not count as a modal. Footer controls still block input. Without positive composer-focus evidence, the conservative whole-screen check remains. Private failure diagnostics include the matched rule, row, and a bounded excerpt, so a dialog warning can be traced to the text that triggered it.
+
+
+### Answer terminal approvals from Discord
+
+For supported Claude/Codex numbered Yes/No permission dialogs, the bot posts the visible terminal context and **Yes** / **No** buttons in the connected channel. Longer context is attached as `terminal-approval.txt`. Review that context before choosing. Only the configured owner can click; the bot never chooses automatically or exposes an always-allow option as Yes.
+
+Cards expire after ten minutes or when the process, session, pane binding, or prompt changes. Selection is rechecked before navigation and before confirmation. Used cards cannot submit twice; cards from a previous relay process are invalid. A confirmation reports the key submission, not whether the approved command later succeeded. Normal messages remain blocked while a permission dialog is open; resend them separately after resolving it.
+
+Only recognized numbered permission dialogs are supported. Workspace trust, login, arbitrary questionnaires, and unknown layouts stay in the terminal. If a card expires, the next poll posts a fresh card when the same supported approval is still visible. The relay does not change model permission settings or restart models.
+
+Tests: `npm test`; on a Linux host with tmux, `npm run test:tmux-approvals` exercises Yes and No in an isolated fake terminal without running a model or approving a real operation.

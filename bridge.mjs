@@ -1,9 +1,10 @@
+import {attachApprovals} from './approvals.mjs';
 import {readFile,writeFile,rename,stat,open} from 'node:fs/promises';
 import {join} from 'node:path';
 import {Client,GatewayIntentBits,REST,Routes} from 'discord.js';
 import {dataDir} from './runtime.mjs';
 import {createHash} from 'node:crypto';
-import {sendText,validateTarget,redact} from './terminal.mjs';
+import {sendText,validateTarget,redact,screen,tmux} from './terminal.mjs';
 import {chatMessage,chunks} from './chat.mjs';
 import {discover,adopt,timestamp} from './follow.mjs';
 import {ConnectionPicker,connectControls,initialState,atomicJson} from './connections.mjs';
@@ -20,6 +21,10 @@ const hash=s=>createHash('sha256').update(typeof s==='string'?s.trim():s).digest
 const queues=new Map();const serial=(key,fn)=>{const p=(queues.get(key)||Promise.resolve()).catch(()=>{}).then(fn);queues.set(key,p);return p;};
 const picker=new ConnectionPicker({cfg,persist:next=>atomicJson(join(dir,'config.json'),next)});
 const modelAvatars=new ModelAvatars({avatarDir:join(dir,'avatars'),botId:()=>client.user.id,enabled:()=>cfg.modelAvatars===true});
+const approvals=attachApprovals({client,cfg,serial,discover,redact,language:'en',
+ read:async target=>{if((await tmux(['display-message','-p','-t',target.pane,'#{pane_in_mode}'])).trim()!=='0')return '';return screen(target);},
+ keys:async(target,keys)=>{await validateTarget(target);if((await tmux(['display-message','-p','-t',target.pane,'#{pane_in_mode}'])).trim()!=='0')throw Error('Terminal mode changed.');await tmux(['send-keys','-t',target.pane,...keys]);}
+});
 async function post(channel,text,replyNumber,agent){const parts=await discordPayloads(redact(text));for(const payload of replyNumber?groupReply(parts,replyNumber):parts)await modelAvatars.send(channel,payload,agent);}
 function info(b){if(!b)return 'This channel is not connected. Select a tmux pane with Connect terminal.';const a=state[b.channel]?.active;return `**Following tmux pane: ${b.location||b.target?.location}**\n${a?`Last identified: ${a.target.agent} · ${a.title}${a.id?`（…${a.id.slice(-8)}）`:''}`:'Waiting for the model to become ready.'}\nSend text directly. The relay follows supported session and process changes in this pane. Messages are not queued while the model is absent.\nUse Connect terminal to change panes or reconnect after a restart.`;}
 const connectionMessage=content=>({content:redact(content),components:connectControls(),allowedMentions:{parse:[]}});
@@ -139,6 +144,6 @@ client.once('clientReady',async()=>{
  await rest.put(Routes.applicationGuildCommands(client.user.id,cfg.guild),{body:commands});
  console.log('ready: follows tmux pane across process/session changes; no model launch or resume');setInterval(()=>tick(),2000);await tick();
 });
-for(const signal of ['SIGTERM','SIGINT'])process.on(signal,async()=>{if(stopping)return;stopping=true;while(polling)await new Promise(r=>setTimeout(r,25));await Promise.allSettled([...queues.values()]);try{await save();}catch(e){console.error('shutdown-save:',redact(e.message));}await client.destroy();process.exit(0);});
+for(const signal of ['SIGTERM','SIGINT'])process.on(signal,async()=>{if(stopping)return;stopping=true;approvals.stop();while(polling)await new Promise(r=>setTimeout(r,25));await Promise.allSettled([...queues.values()]);try{await save();}catch(e){console.error('shutdown-save:',redact(e.message));}await client.destroy();process.exit(0);});
 client.on('error',e=>console.error('discord:',redact(e.message)));
 await client.login(token);

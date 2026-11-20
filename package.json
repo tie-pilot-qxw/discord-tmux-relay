@@ -11,7 +11,8 @@
     "init": "node init.mjs",
     "start": "node bridge.mjs",
     "install-service": "node install-service.mjs",
-    "test": "python3 verify-codex.py && node verify-connections.mjs && node verify-poll.mjs && node verify-render.mjs && node verify-setup.mjs && node verify-input.mjs && node verify-replace.mjs && node verify-reply-groups.mjs && node verify-table-images.mjs && node verify-model-avatars.mjs && node verify-storage.mjs && node verify-input-diagnostics.mjs && node verify-rendered-input.mjs"
+    "test": "python3 verify-codex.py && node verify-connections.mjs && node verify-poll.mjs && node verify-render.mjs && node verify-setup.mjs && node verify-input.mjs && node verify-replace.mjs && node verify-reply-groups.mjs && node verify-table-images.mjs && node verify-model-avatars.mjs && node verify-storage.mjs && node verify-input-diagnostics.mjs && node verify-rendered-input.mjs && node verify-approvals.mjs",
+    "test:tmux-approvals": "node verify-approvals-tmux.mjs"
   },
   "dependencies": {
     "discord.js": "14.28.1",
