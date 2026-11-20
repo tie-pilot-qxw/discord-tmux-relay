@@ -43,3 +43,24 @@ for(const override of [{owner:'intruder'},{guild:'other'},{channel:'other'},{mes
  const f=fixture();f.setText(dialog(0,'long context '.repeat(200)));await f.relay.poll(f.cfg.bindings[0]);assert.ok(f.messages[0].files[0].attachment.length>1500);
 }
 console.log('PASS: approval parsing, owner/channel/message binding, expiry, process/session changes, navigation race, one-time submission, dedup and full-context attachment.');
+
+// A custom question reply must reach chat only after dismissing this question.
+{
+ const question='Which colour?\n❯ 1. Blue\n  2. Green\n  3. Type something.\n  4. Chat about this\n\nEnter to select · ↑/↓ to navigate · Esc to cancel';
+ const f=fixture();f.setText(question);
+ await f.relay.poll(f.cfg.bindings[0]);const args={...f.args(),choice:'reply',answer:'I cannot choose.'};
+ assert.equal(f.messages[0].components[0].components.length,1);
+ assert.match(f.messages[0].components[0].components[0].custom_id,/^relay-question:/);
+ await assert.rejects(()=>f.relay.choose({...args,choice:'yes'}));
+ await assert.rejects(()=>f.relay.choose({...args,answer:'/quit'}));
+ f.setText(question.replace('Which colour?','Which other colour?'));
+ await assert.rejects(()=>f.relay.choose(args));assert.deepEqual(f.keys,[]);
+ f.setText(question);let sent;
+ f.relay.replyText=async(t,text,guard)=>{await guard();assert.deepEqual(f.keys,['Escape']);sent=text;};
+ await f.relay.choose(args);assert.equal(sent,args.answer);
+ await assert.rejects(()=>f.relay.choose(args));assert.deepEqual(f.keys,['Escape']);
+ const {parseQuestion}=await import('./approvals.mjs');
+ assert.equal(parseQuestion(question,'codex'),null);
+ assert.equal(parseQuestion(question+'\n─────────────────\n❯ \n─────────────────','claude'),null);
+ assert.equal(parseQuestion(dialog(),'claude'),null);
+}

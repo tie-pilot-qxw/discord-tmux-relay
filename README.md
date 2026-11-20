@@ -321,3 +321,8 @@ Cards expire after ten minutes or when the process, session, pane binding, or pr
 Only recognized numbered permission dialogs are supported. Workspace trust, login, arbitrary questionnaires, and unknown layouts stay in the terminal. If a card expires, the next poll posts a fresh card when the same supported approval is still visible. The relay does not change model permission settings or restart models.
 
 Tests: `npm test`; on a Linux host with tmux, `npm run test:tmux-approvals` exercises Yes and No in an isolated fake terminal without running a model or approving a real operation.
+
+
+### Send a custom reply to a Claude questionnaire
+
+When Claude displays a numbered question with its free-text or chat option and cancel hint, the connected channel shows a **Custom reply** button. Edit the suggested message in the form or send it as written. On submission, the relay checks that the same question is still open, cancels that questionnaire, waits for the main input, and sends your text into the same conversation. This also leaves any partially completed questionnaire. Keep using the terminal to submit structured selections.

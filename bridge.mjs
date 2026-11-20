@@ -4,7 +4,7 @@ import {join} from 'node:path';
 import {Client,GatewayIntentBits,REST,Routes} from 'discord.js';
 import {dataDir} from './runtime.mjs';
 import {createHash} from 'node:crypto';
-import {sendText,validateTarget,redact,screen,tmux} from './terminal.mjs';
+import {sendText,validateTarget,redact,screen,tmux,inputScreen,inputBlockReason} from './terminal.mjs';
 import {chatMessage,chunks} from './chat.mjs';
 import {discover,adopt,timestamp} from './follow.mjs';
 import {ConnectionPicker,connectControls,initialState,atomicJson} from './connections.mjs';
@@ -22,6 +22,22 @@ const queues=new Map();const serial=(key,fn)=>{const p=(queues.get(key)||Promise
 const picker=new ConnectionPicker({cfg,persist:next=>atomicJson(join(dir,'config.json'),next)});
 const modelAvatars=new ModelAvatars({avatarDir:join(dir,'avatars'),botId:()=>client.user.id,enabled:()=>cfg.modelAvatars===true});
 const approvals=attachApprovals({client,cfg,serial,discover,redact,language:'en',
+ replyText:async(target,text,guard)=>{
+  const ready=async()=>{
+   await guard();
+   const view=await inputScreen(target);
+   return view.composerFocused&&!inputBlockReason(view.text,'claude',{composerFocused:true,suggestion:view.suggestion});
+  };
+  const error=()=>Error('The main input is not ready. Send your reply in the channel when it is available.');
+  for(let attempt=0;attempt<15;attempt++){
+   if(await ready()){
+    await sendText(target,text,async()=>{if(!await ready())throw error();});
+    return;
+   }
+   await new Promise(resolve=>setTimeout(resolve,150));
+  }
+  throw error();
+ },
  read:async target=>{if((await tmux(['display-message','-p','-t',target.pane,'#{pane_in_mode}'])).trim()!=='0')return '';return screen(target);},
  keys:async(target,keys)=>{await validateTarget(target);if((await tmux(['display-message','-p','-t',target.pane,'#{pane_in_mode}'])).trim()!=='0')throw Error('Terminal mode changed.');await tmux(['send-keys','-t',target.pane,...keys]);}
 });

@@ -16,6 +16,17 @@ def render():
  text+=('❯' if selected==1 else ' ')+' 2. No\\r\\n\\r\\nEsc to cancel · Tab to amend\\r\\n'
  os.write(1,('\\x1b[2J\\x1b[H'+text).encode())
 try:
+ if sys.argv[2]=='reply':
+  os.write(1,'Which colour?\\r\\n❯ 1. Blue\\r\\n  2. Type something.\\r\\nEnter to select · ↑/↓ to navigate · Esc to cancel'.encode())
+  assert os.read(fd,1)==b'\\x1b'
+  os.write(1,'\\x1b[2J\\x1b[HChat ready'.encode())
+  data=b''
+  while True:
+   ch=os.read(fd,1)
+   if ch==b'\\r':break
+   data+=ch
+  with open(sys.argv[1],'wb') as f:f.write(data)
+  sys.exit(0)
  render()
  while True:
   ch=os.read(fd,1)
@@ -30,16 +41,27 @@ try:
 finally:termios.tcsetattr(fd,termios.TCSADRAIN,old)
 `);
 try{
- for(const choice of ['yes','no']){
+ for(const choice of ['yes','no','reply']){
   const output=join(root,choice+'.txt');
-  await tmux(['new-session','-d','-s','probe','-x','100','-y','30','python3',fixture,output]);
+  await tmux(['new-session','-d','-s','probe','-x','100','-y','30','python3',fixture,output,choice]);
   const cfg={owner:'owner',guild:'guild',bindings:[{channel:'channel',revision:'revision'}]};
   const relay=new ApprovalRelay({cfg,discover:async()=>({key:'test',target:{pane:'probe:0.0',pid:1,start:'test',agent:'claude'}}),read:async()=>tmux(['capture-pane','-p','-t','probe:0.0']),keys:async(t,k)=>tmux(['send-keys','-t',t.pane,...k]),send:async()=>({id:'card'})});
   for(let i=0;i<40&&!relay.pending.has('channel');i++){await new Promise(r=>setTimeout(r,50));await relay.poll(cfg.bindings[0]);}
   assert.ok(relay.pending.has('channel'));
-  await relay.choose({channel:'channel',owner:'owner',guild:'guild',messageId:'card',token:relay.pending.get('channel').token,choice});
+  const answer='I cannot choose.';
+  relay.replyText=async(target,text,guard)=>{
+   await guard();
+   for(let i=0;i<30;i++){
+    if((await relay.read(target)).includes('Chat ready'))break;
+    await new Promise(r=>setTimeout(r,40));
+   }
+   assert.match(await relay.read(target),/Chat ready/);
+   await tmux(['send-keys','-t',target.pane,'-l',text]);
+   await tmux(['send-keys','-t',target.pane,'Enter']);
+  };
+  await relay.choose({channel:'channel',owner:'owner',guild:'guild',messageId:'card',token:relay.pending.get('channel').token,choice,answer});
   let result;for(let i=0;i<40;i++){result=await readFile(output,'utf8').catch(()=>null);if(result)break;await new Promise(r=>setTimeout(r,50));}
-  assert.equal(result,choice);await tmux(['kill-server']).catch(()=>{});
+  assert.equal(result,choice==='reply'?answer:choice);await tmux(['kill-server']).catch(()=>{});
  }
- console.log('PASS: real isolated tmux/PTY receives Yes and No through the approval adapter; no model or real command was started.');
+ console.log('PASS: real isolated tmux/PTY receives Yes, No and a custom chat reply through the approval adapter; no model or real command was started.');
 }finally{await tmux(['kill-server']).catch(()=>{});await rm(root,{recursive:true,force:true});}
